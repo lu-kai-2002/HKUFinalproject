@@ -21,6 +21,7 @@ public class QuestionController {
 
     @PostMapping("/ask")
     public Mono<ResponseEntity<AnswerResponse>> askQuestion(@RequestBody QuestionRequest request) {
+        System.out.println(request);
         return questionService.getAnswer(request.getText())
                 .map(answer -> ResponseEntity.ok(new AnswerResponse(answer)))
                 .onErrorResume(e -> Mono.just(
