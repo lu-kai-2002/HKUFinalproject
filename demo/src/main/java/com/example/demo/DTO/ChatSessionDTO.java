@@ -7,8 +7,7 @@ import lombok.NoArgsConstructor;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class QuestionRequest {
-    private String text;
-    // 如果前端传递了会话ID，则使用；若为空，则后台生成新的会话ID
+public class ChatSessionDTO {
     private String conversationId;
+    private String title; // 例如第一个问题（如果超过 10 个字符则截取前 10 个）
 }
