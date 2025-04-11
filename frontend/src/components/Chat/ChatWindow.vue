@@ -5,58 +5,62 @@
         请从左侧选择一个会话以查看聊天记录
       </div>
       <div v-else>
+        <!-- 遍历消息数组 -->
         <div v-for="(msg, index) in messages" :key="msg.id || index" class="message-item">
-          <div v-if="msg.question" class="question">Q: {{ msg.question }}</div>
-          <div v-if="msg.answer" class="answer">A: {{ msg.answer }}</div>
+          <!-- 显示用户问题 -->
+          <div v-if="msg.question" class="question">
+            Q: {{ msg.question }}
+          </div>
+          <!-- 使用 ChatMessage 组件渲染答案（Markdown 格式转换为 HTML） -->
+          <ChatMessage v-if="msg.answer" :sender="msg.sender" :content="msg.answer" />
+          <!-- 显示时间戳 -->
           <div class="timestamp">{{ formatTimestamp(msg.timestamp) }}</div>
         </div>
       </div>
     </div>
-    <!-- 聊天输入区域 -->
     <ChatInput @send="handleSend" />
   </div>
 </template>
 
 <script setup>
 import { computed } from 'vue';
+import axios from 'axios';
 import { useChatSessionsStore } from '@/store/chatSessionStore';
 import ChatInput from '../Chat/ChatInput.vue';
-import axios from 'axios';
+import ChatMessage from '../Chat/ChatMessage.vue';
 
-const chatSessionsStore = useChatSessionsStore();
-// 当前会话完整的聊天记录
-const messages = computed(() => chatSessionsStore.messages);
+const chatStore = useChatSessionsStore();
+const messages = computed(() => chatStore.messages);
 
-// 发送消息，调用 /ask 接口获取真实回复
+// 发送消息处理逻辑：使用 /ask 接口获取真实回答，然后追加消息到 store 中
 async function handleSend(text) {
-  // 从全局 store 中获取当前选中的会话ID
-  const conversationId = chatSessionsStore.selectedSessionId;
+  const conversationId = chatStore.selectedSessionId;
+  // 发送用户问题时先乐观更新，可选择先显示“正在回答…”后更新答案
+  const tempId = Date.now();
+  // 先添加占位消息到 store 中
+  chatStore.addMessage({
+    id: tempId,
+    sender: 'bot',  // 假设回答来自机器人端
+    question: text,
+    answer: "正在回答…",
+    timestamp: new Date().toISOString()
+  });
   try {
-    // 调用 /ask 接口，发送用户提问和会话ID
-    const response = await axios.post('/api/v1/ask', {
-      text: text,
-      conversationId: conversationId
-    });
-    // 后端返回的响应数据中包含 answer 和 conversationId
+    const response = await axios.post('/api/v1/ask', { text, conversationId });
     const { answer, conversationId: respConversationId } = response.data;
-    // 更新 store 中的会话ID（如果本次请求生成了新会话ID）
     if (!conversationId && respConversationId) {
-      chatSessionsStore.selectedSessionId = respConversationId;
+      chatStore.selectedSessionId = respConversationId;
     }
-    // 构造一条新的聊天记录，根据需要生成一个临时 id
-    const newMessage = {
-      id: Date.now(), // 临时生成一个唯一 id（可以用后端返回的 id 替换）
-      question: text,
-      answer: answer,
-      timestamp: new Date().toISOString()
-    };
-    // 追加该条消息到 store 中当前会话的消息记录
-    chatSessionsStore.addMessage(newMessage);
+    // 更新先前添加的消息，将占位答案替换为真实答案
+    chatStore.updateMessage(tempId, answer);
   } catch (error) {
     console.error("发送消息失败", error);
+    // 出错时更新回答为错误提示
+    chatStore.updateMessage(tempId, "回答失败，请重试");
   }
 }
 
+// 格式化时间戳
 function formatTimestamp(ts) {
   if (!ts) return '';
   return new Date(ts).toLocaleString();
@@ -89,15 +93,12 @@ function formatTimestamp(ts) {
   font-weight: bold;
   margin-bottom: 4px;
 }
-.answer {
-  margin-left: 20px;
-  margin-bottom: 4px;
-}
 .timestamp {
   font-size: 12px;
   color: #666;
   text-align: right;
 }
 </style>
+
 
 

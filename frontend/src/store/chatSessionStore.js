@@ -1,14 +1,13 @@
-// src/store/chatSessionsStore.js
 import { defineStore } from 'pinia';
 import axios from 'axios';
 
 export const useChatSessionsStore = defineStore('chatSessions', {
     state: () => ({
-        // 会话列表：每个对象包含 { conversationId, title }
+        // 后端返回的会话数组，每个会话对象包含 { conversationId, title }
         sessions: [],
-        // 当前选中的会话 ID
+        // 当前选中的会话ID
         selectedSessionId: null,
-        // 当前会话的完整聊天记录
+        // 当前会话的完整聊天记录，每条记录格式为 { id, question, answer, timestamp }
         messages: []
     }),
     actions: {
@@ -16,8 +15,7 @@ export const useChatSessionsStore = defineStore('chatSessions', {
         async fetchSessions() {
             try {
                 const response = await axios.get('/api/v1/chat-sessions');
-                // 假设后端返回的每个会话对象包含 conversationId 和 title 字段
-                // 为了兼容要求：如果标题超过 10 个字符则截取前 10 个
+                // 假设后端返回的会话对象包含 conversationId 和 title（如果标题超过10个字符则截取前10个）
                 this.sessions = response.data.map(session => {
                     let title = session.title ? session.title.trim() : '新会话';
                     if (title.length > 10) {
@@ -46,9 +44,16 @@ export const useChatSessionsStore = defineStore('chatSessions', {
             this.selectedSessionId = conversationId;
             this.fetchMessages(conversationId);
         },
-        // 当新消息加入当前会话时，追加到 messages 数组中
+        // 添加新消息到当前会话消息数组中
         addMessage(message) {
             this.messages.push(message);
+        },
+        // 更新指定消息的回答内容
+        updateMessage(id, newAnswer) {
+            const index = this.messages.findIndex(msg => msg.id === id);
+            if (index !== -1) {
+                this.messages[index].answer = newAnswer;
+            }
         }
     }
 });

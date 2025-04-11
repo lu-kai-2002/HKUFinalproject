@@ -3,10 +3,10 @@
   <div class="sidebar-container">
     <h2 class="logo">My App</h2>
     <nav class="nav">
-      <router-link to="/" class="nav-item" exact>首页</router-link>
+      <router-link to="/" class="nav-item" exact>Main</router-link>
       <!-- 嵌套一个区块用于聊天导航和下一级聊天记录 -->
       <div class="chat-menu">
-        <router-link to="/chat" class="nav-item">聊天</router-link>
+        <router-link to="/chat" class="nav-item">Chat</router-link>
         <!-- 如果当前路由为 /chat，则显示下一级的聊天记录侧边栏 -->
         <ChatSessionsSidebar v-if="showNestedSidebar" class="nested-sidebar" />
       </div>

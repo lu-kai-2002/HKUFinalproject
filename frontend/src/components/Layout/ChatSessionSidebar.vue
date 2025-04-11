@@ -1,6 +1,6 @@
 <template>
   <div class="chat-sessions-sidebar">
-    <h3 class="title">会话列表</h3>
+    <h3 class="title">Session List</h3>
     <ul class="sessions-list">
       <li
           v-for="session in sessions"
