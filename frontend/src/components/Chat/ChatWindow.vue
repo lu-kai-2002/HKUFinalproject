@@ -1,102 +1,133 @@
-<template>
-  <div class="chat-window">
-    <div class="message-list">
-      <div v-if="messages.length === 0" class="empty-msg">
-        请从左侧选择一个会话以查看聊天记录
-      </div>
-      <div v-else>
-        <!-- 遍历消息数组 -->
-        <div v-for="(msg, index) in messages" :key="msg.id || index" class="message-item">
-          <!-- 显示用户问题 -->
-          <div v-if="msg.question" class="question">
-            Q: {{ msg.question }}
-          </div>
-          <!-- 使用 ChatMessage 组件渲染答案（Markdown 格式转换为 HTML） -->
-          <ChatMessage v-if="msg.answer" :sender="msg.sender" :content="msg.answer" />
-          <!-- 显示时间戳 -->
-          <div class="timestamp">{{ formatTimestamp(msg.timestamp) }}</div>
-        </div>
-      </div>
-    </div>
-    <ChatInput @send="handleSend" />
-  </div>
-</template>
-
 <script setup>
-import { computed } from 'vue';
+import { ref, computed } from 'vue';
+import dayjs from 'dayjs';                       // ⭐ 新增
 import axios from 'axios';
 import { useChatSessionsStore } from '@/store/chatSessionStore';
-import ChatInput from '../Chat/ChatInput.vue';
+import ChatInput   from '../Chat/ChatInput.vue';
 import ChatMessage from '../Chat/ChatMessage.vue';
 
 const chatStore = useChatSessionsStore();
-const messages = computed(() => chatStore.messages);
+const messages  = computed(() => chatStore.messages);
 
-// 发送消息处理逻辑：使用 /ask 接口获取真实回答，然后追加消息到 store 中
-async function handleSend(text) {
-  const conversationId = chatStore.selectedSessionId;
-  // 发送用户问题时先乐观更新，可选择先显示“正在回答…”后更新答案
+// 缓存尚未发送的文件内容
+const cachedFileText = ref('');
+const cachedFileName = ref('');
+
+// 上传完成 → 缓存
+function handleUploaded({ text, fileName }) {
+  cachedFileText.value = text;
+  cachedFileName.value = fileName;
+}
+
+// 发送 prompt
+async function handleSend(prompt) {
+  const fullPrompt = cachedFileText.value
+      ? `${prompt}\n\n---\nAttached Document:\n${cachedFileText.value}`
+      : prompt;
+
   const tempId = Date.now();
-  // 先添加占位消息到 store 中
+
+  // 推送用户提问
   chatStore.addMessage({
     id: tempId,
-    sender: 'bot',  // 假设回答来自机器人端
-    question: text,
-    answer: "正在回答…",
+    sender: 'user',
+    question: prompt,
+    answer: null,
     timestamp: new Date().toISOString()
   });
+
+  // 推送占位回答
+  chatStore.addMessage({
+    id: `${tempId}_bot`,
+    sender: 'bot',
+    question: null,
+    answer: '正在回答…',
+    timestamp: new Date().toISOString()
+  });
+
   try {
-    const response = await axios.post('/api/v1/ask', { text, conversationId });
-    const { answer, conversationId: respConversationId } = response.data;
-    if (!conversationId && respConversationId) {
-      chatStore.selectedSessionId = respConversationId;
+    const { data } = await axios.post('/api/v1/ask', {
+      text: fullPrompt,
+      conversationId: chatStore.selectedSessionId
+    });
+
+    if (!chatStore.selectedSessionId && data.conversationId) {
+      chatStore.selectedSessionId = data.conversationId;
     }
-    // 更新先前添加的消息，将占位答案替换为真实答案
-    chatStore.updateMessage(tempId, answer);
-  } catch (error) {
-    console.error("发送消息失败", error);
-    // 出错时更新回答为错误提示
-    chatStore.updateMessage(tempId, "回答失败，请重试");
+    chatStore.updateMessage(`${tempId}_bot`, data.answer);
+  } catch (err) {
+    console.error('发送失败', err);
+    chatStore.updateMessage(`${tempId}_bot`, '回答失败，请重试');
   }
+
+  // 清空文件缓存
+  cachedFileText.value = '';
+  cachedFileName.value = '';
 }
 
-// 格式化时间戳
-function formatTimestamp(ts) {
+function fmt(ts) {
   if (!ts) return '';
-  return new Date(ts).toLocaleString();
+  const iso = /Z$|[+\-]\d\d:?\d\d$/.test(ts) ? ts : `${ts}Z`;
+  const d   = dayjs(iso);
+  return d.isValid() ? d.format('YYYY/MM/DD HH:mm:ss') : ts;
 }
+
 </script>
 
+<template>
+  <div class="chat-window">
+    <!-- 消息列表 -->
+    <div class="message-list">
+      <div v-if="messages.length === 0" class="empty-msg">
+        Please Choose Session
+      </div>
+
+      <template v-else>
+        <div v-for="msg in messages" :key="msg.id" class="message-item">
+          <div v-if="msg.question" class="question">Q: {{ msg.question }}</div>
+          <ChatMessage
+              v-if="msg.answer"
+              :sender="msg.sender"
+              :content="msg.answer"
+          />
+          <div class="timestamp">{{ fmt(msg.timestamp) }}</div>
+        </div>
+      </template>
+    </div>
+
+    <!-- 待发送文件提示 -->
+    <div v-if="cachedFileName" class="pending-file">
+      Attached: {{ cachedFileName }}
+    </div>
+
+    <!-- 底部工具栏 -->
+    <ChatInput
+        @send="handleSend"
+        @uploaded="handleUploaded"
+    />
+  </div>
+</template>
+
 <style scoped>
-.chat-window {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-.message-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 10px;
-}
-.empty-msg {
-  text-align: center;
-  color: #888;
-  margin-top: 20px;
-}
-.message-item {
-  margin-bottom: 15px;
-  padding: 8px;
-  border-radius: 4px;
-  background-color: #f0f0f0;
-}
-.question {
-  font-weight: bold;
-  margin-bottom: 4px;
-}
-.timestamp {
-  font-size: 12px;
-  color: #666;
-  text-align: right;
+.chat-window { display:flex; flex-direction:column; height:100%; }
+
+/* 消息区滚动 */
+.message-list { flex:1 1 auto; overflow-y:auto; padding:12px 14px; }
+
+.empty-msg   { text-align:center; color:#888; margin-top:30px; }
+
+.message-item { margin-bottom:14px; }
+.question     { font-weight:600; margin-bottom:4px; }
+
+.timestamp { font-size:12px; color:#666; text-align:right; }
+
+/* 待发送文件提示 */
+.pending-file {
+  font-size:12px;
+  color:#888;
+  padding:4px 16px;
+  background:#f5f5f5;
+  border-top:1px solid #e0e0e0;
 }
 </style>
 

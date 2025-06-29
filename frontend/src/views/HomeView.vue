@@ -1,7 +1,7 @@
 <template>
   <div>
-    <h1>欢迎来到首页</h1>
-    <p>选择左侧的功能进入相应页面。</p>
+    <h1>Welcome to Home Page!</h1>
+    <p>Please choose the functions on the left sidebar.</p>
   </div>
 </template>
 

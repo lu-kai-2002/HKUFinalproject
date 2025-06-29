@@ -1,115 +1,157 @@
 <template>
-  <div class="chat-input">
-    <!-- 自定义上传按钮 -->
-    <label class="upload-label">
-      Upload Word
-      <input type="file" accept=".doc,.docx" @change="handleFileUpload" hidden />
+  <!-- fixed-bottom toolbar -->
+  <footer class="chat-toolbar">
+    <!-- Upload -->
+    <label class="upload-btn">
+      <svg viewBox="0 0 16 16" class="icon"><path d="M3 10l5-5 5 5H9v5H7v-5z"/></svg>
+      <span class="text">Upload Word</span>
+      <input type="file" accept=".doc,.docx" @change="handleFile" hidden />
     </label>
 
-    <!-- 文本输入框 -->
+    <!-- File status -->
+    <span v-if="fileName" class="file-info">
+      {{ fileName }} — {{ uploadState }}
+    </span>
+
+    <!-- 再次显示但不影响逻辑的模型切换复选框 -->
+    <label class="model-toggle">
+      <input
+          type="checkbox"
+          v-model="useFinanceModel"
+      />
+      Finance-Optimized Mode
+    </label>
+
+    <!-- Prompt -->
     <input
+        class="prompt"
         type="text"
         v-model="inputText"
-        @keyup.enter="handleSend"
-        placeholder="Input Message..."
+        @keyup.enter="emitSend"
+        placeholder="Type your message…"
     />
-    <button @click="handleSend">Send</button>
-  </div>
+
+    <!-- Send -->
+    <button class="send-btn" @click="emitSend">
+      Send
+    </button>
+  </footer>
 </template>
 
 <script setup>
 import { ref } from 'vue';
-import { askQuestion } from '../../api/Question.js';
-import { useChatSessionsStore } from '@/store/chatSessionStore';
 import { uploadWord } from '../../api/file.js';
 
-const inputText = ref('');
-const chatStore = useChatSessionsStore();
+const emit = defineEmits(['send', 'uploaded']);
 
-async function handleSend() {
-  const text = inputText.value.trim();
-  if (!text) return;
+const inputText   = ref('');
+const fileName    = ref('');
+const uploadState = ref('');
+// 保留这个状态以便 UI 不崩，但不在 emitSend 中使用它
+const useFinanceModel = ref(false);
 
-  const tempId = Date.now();
-  const optimisticMessage = {
-    id: tempId,
-    question: text,
-    answer: '正在回答…',
-    timestamp: new Date().toISOString()
-  };
-  chatStore.addMessage(optimisticMessage);
+function handleFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  fileName.value    = file.name;
+  uploadState.value = 'Uploading…';
+  uploadWord(file)
+      .then(({ data }) => {
+        uploadState.value = 'Uploaded';
+        emit('uploaded', { text: data.text, fileName: file.name });
+      })
+      .catch(err => {
+        console.error('upload failed', err);
+        uploadState.value = 'Failed';
+      });
+}
+
+function emitSend() {
+  const prompt = inputText.value.trim();
+  if (!prompt) return;
+  // 只发文本，不做任何路由分流
+  emit('send', prompt);
   inputText.value = '';
-
-  try {
-    const response = await askQuestion(text, chatStore.selectedSessionId);
-    const { answer, conversationId } = response.data;
-
-    if (!chatStore.selectedSessionId && conversationId) {
-      chatStore.selectedSessionId = conversationId;
-    }
-
-    chatStore.updateMessage(tempId, answer);
-  } catch (error) {
-    console.error('发送消息失败', error);
-    chatStore.updateMessage(tempId, '回答失败，请重试');
-  }
-}
-
-function handleFileUpload(event) {
-  const file = event.target.files[0];
-  if (file) {
-    uploadWordFile(file);
-  }
-}
-
-async function uploadWordFile(file) {
-  try {
-    const response = await uploadWord(file);
-    const { text } = response.data;
-    inputText.value = text;
-    // handleSend(); // 可选：是否自动发送
-  } catch (error) {
-    console.error('上传并解析 Word 文件失败', error);
-  }
 }
 </script>
 
 <style scoped>
-.chat-input {
+.chat-toolbar {
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  width: 100%;
   display: flex;
-  align-items: center;
+  gap: 8px;
   padding: 10px;
-  border-top: 1px solid #ccc;
+  background: #fafafa;
+  border-top: 1px solid #e0e0e0;
+  align-items: center;
+  box-shadow: 0 -2px 6px rgba(0,0,0,0.04);
 }
 
-.upload-label {
-  background-color: #409eff;
-  color: white;
-  padding: 8px 12px;
+.upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background: #eef4ff;
+  color: #2a65ff;
   border-radius: 4px;
   cursor: pointer;
-  margin-right: 10px;
+  font-size: 13px;
+  user-select: none;
+}
+.upload-btn:hover { background:#e2ebff; }
+.upload-btn .icon {
+  width: 14px; height: 14px; fill: currentColor;
+}
+
+.file-info {
+  font-size: 12px;
+  color: #666;
+  max-width: 160px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.model-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: #333;
+}
+.model-toggle input {
+  width: 14px;
+  height: 14px;
+}
+
+.prompt {
+  flex: 1 1 auto;
+  padding: 8px 10px;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
   font-size: 14px;
 }
 
-.chat-input input[type='text'] {
-  flex: 1;
-  padding: 8px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-}
-
-.chat-input button {
-  margin-left: 10px;
-  padding: 8px 16px;
+.send-btn {
+  padding: 8px 18px;
+  background: #2a65ff;
+  color: #fff;
   border: none;
-  background-color: #409eff;
-  color: white;
   border-radius: 4px;
+  font-size: 14px;
   cursor: pointer;
 }
+.send-btn:hover { background:#2154d6; }
 </style>
+
+
+
+
+
 
 
 

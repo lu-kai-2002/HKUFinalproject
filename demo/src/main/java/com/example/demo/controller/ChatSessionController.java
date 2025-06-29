@@ -19,9 +19,9 @@ public class ChatSessionController {
 
     @GetMapping("/chat-sessions")
     public Flux<ChatSessionDTO> getChatSessions() {
-        // 示例 SQL：按 conversation_id 分组并取最小 question 作为标题（如有需要可以根据需求修改 SQL）
+
         String sql = "SELECT conversation_id, " +
-                "CASE WHEN LENGTH(MIN(question)) > 10 THEN LEFT(MIN(question), 10) ELSE MIN(question) END AS title " +
+                "CASE WHEN LENGTH(MIN(question)) > 20 THEN LEFT(MIN(question), 20) ELSE MIN(question) END AS title " +
                 "FROM chat_records " +
                 "GROUP BY conversation_id";
         return template.getDatabaseClient().sql(sql)

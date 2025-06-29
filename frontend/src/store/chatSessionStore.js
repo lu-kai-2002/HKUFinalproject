@@ -54,7 +54,11 @@ export const useChatSessionsStore = defineStore('chatSessions', {
             if (index !== -1) {
                 this.messages[index].answer = newAnswer;
             }
+        },
+        addSession(session) {
+            this.sessions.unshift(session); // 放到列表最上方
         }
+
     }
 });
 
