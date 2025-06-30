@@ -29,6 +29,7 @@ const showNestedSidebar = computed(() => route.path === '/chat');
 .sidebar-container {
   padding: 20px;
 }
+
 .logo {
   font-size: 24px;
   margin-bottom: 20px;
