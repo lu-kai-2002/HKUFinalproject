@@ -1,6 +1,7 @@
 package com.example.demo.controller;
 
 import com.example.demo.DTO.AnswerResponse;
+import com.example.demo.DTO.ChatResponse;
 import com.example.demo.DTO.QuestionRequest;
 import com.example.demo.entity.ChatRecord;
 import com.example.demo.repository.ChatRecordRepository;
@@ -11,6 +12,8 @@ import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 @RestController
@@ -53,7 +56,37 @@ public class QuestionController {
                             .body(new AnswerResponse("Error: " + e.getMessage(), conversationId)));
                 });
     }
+    /**
+     * AI 聊天接口（响应式，不做任何持久化）
+     * 支持两种 payload：
+     *  1) 包含 annualReturn 等字段的“回测数据”分析请求
+     *  2) 包含 message 字段的普通文本提问
+     */
+    @PostMapping("/chat")
+    public Mono<ChatResponse> chatNoPersist(@RequestBody Map<String, Object> payload) {
+        // 随机 sessionId，仅用于 service 层上下文（无需存库）
+        String sessionId = UUID.randomUUID().toString();
 
+        // 拼接 questionText
+        String questionText;
+        if (payload.containsKey("annualReturn")) {
+            questionText = String.format(
+                    "请基于以下回测结果给出分析：年化收益率 %s，最大回撤 %s，Sharpe 比率 %s，曲线数据 %s。",
+                    payload.get("annualReturn"),
+                    payload.get("maxDrawdown"),
+                    payload.get("sharpeRatio"),
+                    payload.get("equityCurve").toString()
+            );
+        } else if (payload.containsKey("message")) {
+            questionText = Objects.toString(payload.get("message"), "");
+        } else {
+            questionText = "";
+        }
+
+        // 响应式地拿到 answer，然后包装成 ChatResponse
+        return questionService.getAnswer(questionText)
+                .map(answer -> new ChatResponse(answer));
+    }
     // 根据会话ID查询聊天记录，返回类型统一为 ResponseEntity<Object>
     @GetMapping("/chat-records")
     public Mono<ResponseEntity<Object>> getChatRecords(@RequestParam("conversationId") String conversationId) {
